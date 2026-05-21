@@ -683,6 +683,10 @@ tr:last-child td {
   text-align: right;
 }
 
+@page {
+  margin: 12mm;
+}
+
 @media (max-width: 700px) {
   .field-row,
   .project-header,
@@ -703,23 +707,56 @@ tr:last-child td {
 }
 
 @media print {
-  header,
   .toolbar,
   .btn,
-  .tabs,
   .footer-actions,
-  input,
-  textarea,
-  select {
+  .help-icon,
+  .help-popover,
+  #saveStatus,
+  input[type="file"] {
     display: none !important;
+  }
+
+  html,
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   body {
     background: white;
+    color: var(--text);
+    font-size: 10.5pt;
+    line-height: 1.35;
+  }
+
+  header {
+    background: none !important;
+    color: var(--text) !important;
+    padding: 0 0 9mm;
+    margin-bottom: 6mm;
+    border-bottom: 2px solid var(--border);
+  }
+
+  header .container,
+  main {
+    max-width: none;
+  }
+
+  header p {
+    max-width: none;
+    color: #475467;
   }
 
   main {
     padding: 0;
+  }
+
+  main > .notice,
+  main > section.card {
+    margin-top: 0 !important;
+    margin-bottom: 8px !important;
   }
 
   .card,
@@ -727,8 +764,219 @@ tr:last-child td {
   .scenario-card,
   .distribution-card,
   .investor-card,
-  .subscription-rule {
+  .subscription-rule,
+  .investor-select-row,
+  .readonly-field,
+  table {
     box-shadow: none;
+  }
+
+  .card,
+  .project-card,
+  .distribution-card,
+  .investor-card,
+  .subscription-rule {
+    break-inside: auto;
+    page-break-inside: auto;
+    overflow: visible;
+    border-radius: 12px;
+    border-left: 3px solid var(--primary);
+    padding: 12px;
+  }
+
+  .summary-card,
+  .scenario-card,
+  .notice,
+  .investor-select-row,
+  .metric-list,
+  .summary-tags,
+  .readonly-field {
     break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .subsection {
+    margin-top: 10px;
+  }
+
+  .section-title,
+  .project-header {
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  .section-title p,
+  .microcopy,
+  .summary-card .hint,
+  .status-line,
+  .progress-text {
+    font-size: 0.83rem;
+  }
+
+  h1 {
+    font-size: 22pt;
+    margin-bottom: 8px;
+  }
+
+  h2 {
+    font-size: 15pt;
+  }
+
+  h3 {
+    font-size: 12pt;
+  }
+
+  h4,
+  h5 {
+    font-size: 10.5pt;
+  }
+
+  .grid-5,
+  .grid-4,
+  .grid-3,
+  .grid-slim-3,
+  .scenario-meta,
+  .scenario-meta-3,
+  .field-row,
+  .inline-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .grid-2,
+  .project-header,
+  .investor-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .field-row {
+    align-items: start;
+  }
+
+  .tabs {
+    display: flex !important;
+    margin-bottom: 10px;
+  }
+
+  .tab-btn {
+    display: none !important;
+  }
+
+  .tab-btn.active {
+    display: inline-flex !important;
+    align-items: center;
+    background: #eef4ff !important;
+    color: var(--primary) !important;
+    border-color: #c7d7fe !important;
+    padding: 7px 12px;
+  }
+
+  .segmented {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .toggle-btn {
+    display: none !important;
+  }
+
+  .toggle-btn.active {
+    display: inline-flex !important;
+    padding: 0;
+    background: transparent !important;
+    color: var(--primary) !important;
+    border-radius: 0;
+  }
+
+  input:not([type="checkbox"]):not([type="file"]),
+  select,
+  textarea,
+  .readonly-field {
+    display: block !important;
+    background: #f8fafc !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px;
+    box-shadow: none !important;
+    padding: 8px 10px;
+    min-height: 0;
+  }
+
+  select {
+    appearance: none;
+    background-image: none;
+  }
+
+  textarea {
+    min-height: 56px;
+    white-space: pre-wrap;
+  }
+
+  input[type="checkbox"] {
+    display: inline-block !important;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--primary);
+  }
+
+  .checkbox-row {
+    gap: 8px;
+  }
+
+  .pill,
+  .tag,
+  .notice,
+  .readonly-field,
+  th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .summary-card .value {
+    font-size: 1.35rem;
+  }
+
+  .summary-tags {
+    gap: 6px;
+  }
+
+  .metric-list {
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  .notice {
+    margin-bottom: 10px;
+    padding: 11px 12px;
+  }
+
+  table {
+    overflow: visible;
+    border-radius: 10px;
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  td,
+  th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    padding: 8px 9px;
+    font-size: 0.84rem;
   }
 }
