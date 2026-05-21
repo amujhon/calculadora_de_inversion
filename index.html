@@ -33,10 +33,20 @@
         </div>
       </div>
 
-      <div class="grid grid-4">
+      <div class="grid grid-5">
         <div>
           <label for="analysisMonths" class="hinted-label"><span>Horizonte de análisis en meses</span><span class="help-icon" role="button" tabindex="0" data-help="Cantidad de meses usados para calcular recuperación, flujo acumulado y ROI." aria-label="Cantidad de meses usados para calcular recuperación, flujo acumulado y ROI." aria-expanded="false" title="Cantidad de meses usados para calcular recuperación, flujo acumulado y ROI.">?</span></label>
-          <input id="analysisMonths" data-action="update-analysis-months" data-focus-key="settings-analysisMonths" type="number" min="1" step="1" />
+          <input id="analysisMonths" data-action="update-analysis-months" data-focus-key="settings-analysisMonths" data-numeric-kind="integer" type="text" inputmode="numeric" autocomplete="off" />
+        </div>
+        <div>
+          <label for="developmentPeriodValue" class="hinted-label"><span>Periodo de desarrollo</span><span class="help-icon" role="button" tabindex="0" data-help="Tiempo inicial sin ingresos mientras el software termina de desarrollarse. Este periodo se descuenta del cálculo de recuperación y ROI." aria-label="Tiempo inicial sin ingresos mientras el software termina de desarrollarse. Este periodo se descuenta del cálculo de recuperación y ROI." aria-expanded="false" title="Tiempo inicial sin ingresos mientras el software termina de desarrollarse. Este periodo se descuenta del cálculo de recuperación y ROI.">?</span></label>
+          <div class="inline-fields">
+            <input id="developmentPeriodValue" data-action="update-development-period-value" data-focus-key="settings-developmentPeriodValue" data-numeric-kind="decimal" type="text" inputmode="decimal" autocomplete="off" />
+            <select id="developmentPeriodUnit" data-action="update-development-period-unit" data-focus-key="settings-developmentPeriodUnit">
+              <option value="months">Meses</option>
+              <option value="years">Años</option>
+            </select>
+          </div>
         </div>
         <div>
           <label for="currencySymbol" class="hinted-label"><span>Moneda</span><span class="help-icon" role="button" tabindex="0" data-help="Símbolo monetario mostrado en resultados. No realiza conversión de divisas." aria-label="Símbolo monetario mostrado en resultados. No realiza conversión de divisas." aria-expanded="false" title="Símbolo monetario mostrado en resultados. No realiza conversión de divisas.">?</span></label>

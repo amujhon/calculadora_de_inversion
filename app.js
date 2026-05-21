@@ -21,7 +21,8 @@
   const LEGACY_STORAGE_KEY = "investment-simulator-v1";
 
   const uiState = {
-    saveStatus: ""
+    saveStatus: "",
+    numericDrafts: {}
   };
 
   let state = createSeedState();
@@ -41,6 +42,10 @@
 
   function positiveNumber(value) {
     return Math.max(0, toNumber(value));
+  }
+
+  function integerNumber(value, minimum = 0) {
+    return Math.max(minimum, Math.trunc(positiveNumber(value)));
   }
 
   function clampPercent(value) {
@@ -88,6 +93,88 @@
     return `${amount.toLocaleString("es-EC", { maximumFractionDigits: 2 })} ${config.label.toLowerCase()}`;
   }
 
+  function sanitizeNumericText(value, kind = "decimal") {
+    const raw = String(value ?? "");
+    let sanitized = "";
+    let hasSeparator = false;
+
+    for (const char of raw) {
+      if (char >= "0" && char <= "9") {
+        sanitized += char;
+        continue;
+      }
+
+      if (kind === "decimal" && !hasSeparator && (char === "." || char === ",")) {
+        sanitized += char;
+        hasSeparator = true;
+      }
+    }
+
+    return sanitized;
+  }
+
+  function parseNumericText(value, kind = "decimal") {
+    const sanitized = sanitizeNumericText(value, kind);
+    if (!sanitized) return 0;
+    if (kind === "integer") return integerNumber(sanitized);
+
+    const normalized = sanitized.replace(",", ".");
+    const parseable = normalized.endsWith(".") ? normalized.slice(0, -1) : normalized;
+    if (!parseable || parseable === ".") return 0;
+
+    return positiveNumber(parseable);
+  }
+
+  function numericInputDisplayValue(focusKey, value, kind = "decimal") {
+    if (focusKey && Object.prototype.hasOwnProperty.call(uiState.numericDrafts, focusKey)) {
+      return uiState.numericDrafts[focusKey];
+    }
+
+    const amount = kind === "integer" ? integerNumber(value) : positiveNumber(value);
+    return amount.toLocaleString("es-EC", {
+      useGrouping: false,
+      maximumFractionDigits: kind === "integer" ? 0 : 6
+    });
+  }
+
+  function renderNumericInput({ id = "", value, action, focusKey, kind = "decimal", attributes = "" }) {
+    const inputMode = kind === "integer" ? "numeric" : "decimal";
+    const safeId = id ? ` id="${escapeHtml(id)}"` : "";
+    const safeKind = kind === "integer" ? "integer" : "decimal";
+
+    return `<input${safeId} type="text" inputmode="${inputMode}" autocomplete="off" value="${escapeHtml(numericInputDisplayValue(focusKey, value, safeKind))}" data-action="${escapeHtml(action)}" data-focus-key="${escapeHtml(focusKey)}" data-numeric-kind="${safeKind}"${attributes} />`;
+  }
+
+  function syncNumericInput(target) {
+    const kind = target.dataset.numericKind === "integer" ? "integer" : "decimal";
+    const rawValue = target.value;
+    const selectionStart = target.selectionStart ?? rawValue.length;
+    const selectionEnd = target.selectionEnd ?? selectionStart;
+    const sanitizedValue = sanitizeNumericText(rawValue, kind);
+
+    if (rawValue !== sanitizedValue) {
+      const nextSelectionStart = sanitizeNumericText(rawValue.slice(0, selectionStart), kind).length;
+      const nextSelectionEnd = sanitizeNumericText(rawValue.slice(0, selectionEnd), kind).length;
+      target.value = sanitizedValue;
+      target.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    }
+
+    if (target.dataset.focusKey) {
+      uiState.numericDrafts[target.dataset.focusKey] = sanitizedValue;
+    }
+
+    return {
+      kind,
+      draft: sanitizedValue,
+      value: parseNumericText(sanitizedValue, kind)
+    };
+  }
+
+  function developmentPeriodMonths() {
+    const unit = state.settings.developmentPeriodUnit === "years" ? "years" : "months";
+    return durationToMonths(state.settings.developmentPeriodValue, unit);
+  }
+
   function helpIcon(text) {
     const safeText = escapeHtml(text);
     return `<span class="help-icon" role="button" tabindex="0" data-help="${safeText}" aria-label="${safeText}" aria-expanded="false" title="${safeText}">?</span>`;
@@ -104,6 +191,8 @@
       selectedScenario: "expected",
       settings: {
         analysisMonths: 24,
+        developmentPeriodValue: 0,
+        developmentPeriodUnit: "months",
         currencySymbol: "$",
         globalCostAllocation: "equal",
         roiMode: "netAfterInvestment"
@@ -130,6 +219,8 @@
       selectedScenario: "expected",
       settings: {
         analysisMonths: 24,
+        developmentPeriodValue: 0,
+        developmentPeriodUnit: "months",
         currencySymbol: "$",
         globalCostAllocation: "equal",
         roiMode: "netAfterInvestment"
@@ -243,13 +334,13 @@
                     label: rule.label || "Regla",
                     enabled: rule.enabled !== false,
                     discountPercent: clampPercent(rule.discountPercent),
-                    quantity: positiveNumber(rule.quantity) || 1,
-                    durationValue: positiveNumber(rule.durationValue) || 1,
+                    quantity: integerNumber(rule.quantity, 1) || 1,
+                    durationValue: integerNumber(rule.durationValue, 1) || 1,
                     durationUnit: PERIOD_UNITS[rule.durationUnit] ? rule.durationUnit : "years",
                     affectedClients: {
-                      worst: positiveNumber(rule.affectedClients?.worst),
-                      expected: positiveNumber(rule.affectedClients?.expected),
-                      best: positiveNumber(rule.affectedClients?.best)
+                      worst: integerNumber(rule.affectedClients?.worst),
+                      expected: integerNumber(rule.affectedClients?.expected),
+                      best: integerNumber(rule.affectedClients?.best)
                     }
                   }))
                 : []
@@ -271,7 +362,7 @@
       ? raw.distributions.map(distribution => ({
           id: distribution.id || uid(),
           label: distribution.label || "Repartición",
-          periodValue: positiveNumber(distribution.periodValue) || 1,
+          periodValue: integerNumber(distribution.periodValue, 1) || 1,
           periodUnit: PERIOD_UNITS[distribution.periodUnit] ? distribution.periodUnit : "months",
           investorSharePercent: clampPercent(distribution.investorSharePercent),
           mode: DISTRIBUTION_MODES[distribution.mode] ? distribution.mode : "equal",
@@ -287,7 +378,9 @@
     return {
       selectedScenario: SCENARIOS.some(item => item.key === raw.selectedScenario) ? raw.selectedScenario : base.selectedScenario,
       settings: {
-        analysisMonths: positiveNumber(raw.settings?.analysisMonths) || base.settings.analysisMonths,
+        analysisMonths: integerNumber(raw.settings?.analysisMonths, 1) || base.settings.analysisMonths,
+        developmentPeriodValue: positiveNumber(raw.settings?.developmentPeriodValue),
+        developmentPeriodUnit: raw.settings?.developmentPeriodUnit === "years" ? "years" : "months",
         currencySymbol: raw.settings?.currencySymbol || base.settings.currencySymbol,
         globalCostAllocation: raw.settings?.globalCostAllocation === "none" ? "none" : "equal",
         roiMode: raw.settings?.roiMode === "cashGenerated" ? "cashGenerated" : "netAfterInvestment"
@@ -490,15 +583,21 @@
     const totalCosts = individualCosts + sharedCosts;
     const monthlyNet = grossRevenue - totalCosts;
     const investment = totalInvestment();
-    const months = Math.max(1, positiveNumber(state.settings.analysisMonths));
-    const accumulatedNet = monthlyNet * months;
+    const months = Math.max(1, integerNumber(state.settings.analysisMonths, 1) || 1);
+    const developmentMonths = developmentPeriodMonths();
+    const revenueMonths = Math.max(0, months - developmentMonths);
+    const accumulatedRevenue = grossRevenue * revenueMonths;
+    const accumulatedCosts = totalCosts * months;
+    const accumulatedNet = accumulatedRevenue - accumulatedCosts;
     const profitAfterInvestment = accumulatedNet - investment;
     const roi = investment > 0
       ? (state.settings.roiMode === "cashGenerated"
         ? (accumulatedNet / investment) * 100
         : (profitAfterInvestment / investment) * 100)
       : 0;
-    const paybackMonths = monthlyNet > 0 && investment > 0 ? investment / monthlyNet : Infinity;
+    const paybackMonths = monthlyNet > 0 && investment > 0
+      ? developmentMonths + ((investment + (totalCosts * developmentMonths)) / monthlyNet)
+      : Infinity;
     const monthlyMargin = grossRevenue > 0 ? (monthlyNet / grossRevenue) * 100 : 0;
     const costCoverageRatio = totalCosts > 0 ? grossRevenue / totalCosts : Infinity;
 
@@ -510,6 +609,10 @@
       monthlyNet,
       investment,
       months,
+      developmentMonths,
+      revenueMonths,
+      accumulatedRevenue,
+      accumulatedCosts,
       accumulatedNet,
       profitAfterInvestment,
       roi,
@@ -526,15 +629,21 @@
     const totalMonthlyCost = ownCosts + sharedCost;
     const monthlyNet = revenue.monthlyRevenue - totalMonthlyCost;
     const investment = positiveNumber(project.investment);
-    const months = Math.max(1, positiveNumber(state.settings.analysisMonths));
-    const accumulatedNet = monthlyNet * months;
+    const months = Math.max(1, integerNumber(state.settings.analysisMonths, 1) || 1);
+    const developmentMonths = developmentPeriodMonths();
+    const revenueMonths = Math.max(0, months - developmentMonths);
+    const accumulatedRevenue = revenue.monthlyRevenue * revenueMonths;
+    const accumulatedCosts = totalMonthlyCost * months;
+    const accumulatedNet = accumulatedRevenue - accumulatedCosts;
     const profitAfterInvestment = accumulatedNet - investment;
     const roi = investment > 0
       ? (state.settings.roiMode === "cashGenerated"
         ? (accumulatedNet / investment) * 100
         : (profitAfterInvestment / investment) * 100)
       : 0;
-    const paybackMonths = monthlyNet > 0 && investment > 0 ? investment / monthlyNet : Infinity;
+    const paybackMonths = monthlyNet > 0 && investment > 0
+      ? developmentMonths + ((investment + (totalMonthlyCost * developmentMonths)) / monthlyNet)
+      : Infinity;
 
     return {
       revenue,
@@ -543,6 +652,11 @@
       totalMonthlyCost,
       monthlyNet,
       investment,
+      months,
+      developmentMonths,
+      revenueMonths,
+      accumulatedRevenue,
+      accumulatedCosts,
       accumulatedNet,
       profitAfterInvestment,
       roi,
@@ -665,7 +779,9 @@
   }
 
   function syncSettingsFromState() {
-    document.getElementById("analysisMonths").value = state.settings.analysisMonths;
+    document.getElementById("analysisMonths").value = numericInputDisplayValue("settings-analysisMonths", state.settings.analysisMonths, "integer");
+    document.getElementById("developmentPeriodValue").value = numericInputDisplayValue("settings-developmentPeriodValue", state.settings.developmentPeriodValue, "decimal");
+    document.getElementById("developmentPeriodUnit").value = state.settings.developmentPeriodUnit;
     document.getElementById("currencySymbol").value = state.settings.currencySymbol;
     document.getElementById("globalCostAllocation").value = state.settings.globalCostAllocation;
     document.getElementById("roiMode").value = state.settings.roiMode;
@@ -691,7 +807,12 @@
         </div>
         <div>
           ${labelWithHelp("Valor mensual", "Monto mensual de este costo general.")}
-          <input type="number" min="0" step="0.01" value="${item.amount}" data-action="update-global-cost-amount" data-global-cost-id="${item.id}" data-focus-key="global-cost-amount-${item.id}" />
+          ${renderNumericInput({
+            value: item.amount,
+            action: "update-global-cost-amount",
+            focusKey: `global-cost-amount-${item.id}`,
+            attributes: ` data-global-cost-id="${item.id}"`
+          })}
         </div>
         <button class="btn danger small" type="button" data-action="remove-global-cost" data-global-cost-id="${item.id}">Eliminar</button>
       </div>
@@ -725,7 +846,12 @@
             </div>
             <div>
               ${labelWithHelp("Valor invertido", "Capital inicial destinado al proyecto.")}
-              <input type="number" min="0" step="0.01" value="${project.investment}" data-action="update-project-investment" data-project-id="${project.id}" data-focus-key="project-investment-${project.id}" />
+              ${renderNumericInput({
+                value: project.investment,
+                action: "update-project-investment",
+                focusKey: `project-investment-${project.id}`,
+                attributes: ` data-project-id="${project.id}"`
+              })}
             </div>
           </div>
           <button class="btn danger small" type="button" data-action="remove-project" data-project-id="${project.id}">Eliminar proyecto</button>
@@ -777,7 +903,12 @@
         </div>
         <div>
           ${labelWithHelp("Valor mensual", "Monto mensual del costo individual.")}
-          <input type="number" min="0" step="0.01" value="${cost.amount}" data-action="update-project-cost-amount" data-project-id="${project.id}" data-project-cost-id="${cost.id}" data-focus-key="project-cost-amount-${project.id}-${cost.id}" />
+          ${renderNumericInput({
+            value: cost.amount,
+            action: "update-project-cost-amount",
+            focusKey: `project-cost-amount-${project.id}-${cost.id}`,
+            attributes: ` data-project-id="${project.id}" data-project-cost-id="${cost.id}"`
+          })}
         </div>
         <button class="btn danger small" type="button" data-action="remove-project-cost" data-project-id="${project.id}" data-project-cost-id="${cost.id}">Eliminar</button>
       </div>
@@ -809,11 +940,21 @@
         <div class="scenario-meta">
           <div>
             ${labelWithHelp("Ingreso mensual", "Valor mensual esperado en este escenario.")}
-            <input type="number" min="0" step="0.01" value="${revenue}" data-action="update-manual-monthly" data-project-id="${project.id}" data-scenario-key="${scenario.key}" data-focus-key="manual-monthly-${project.id}-${scenario.key}" />
+            ${renderNumericInput({
+              value: revenue,
+              action: "update-manual-monthly",
+              focusKey: `manual-monthly-${project.id}-${scenario.key}`,
+              attributes: ` data-project-id="${project.id}" data-scenario-key="${scenario.key}"`
+            })}
           </div>
           <div>
             ${labelWithHelp("Ingreso anual", "Valor anual esperado en este escenario. Se divide para 12 para el cálculo mensual.")}
-            <input type="number" min="0" step="0.01" value="${annual}" data-action="update-manual-annual" data-project-id="${project.id}" data-scenario-key="${scenario.key}" data-focus-key="manual-annual-${project.id}-${scenario.key}" />
+            ${renderNumericInput({
+              value: annual,
+              action: "update-manual-annual",
+              focusKey: `manual-annual-${project.id}-${scenario.key}`,
+              attributes: ` data-project-id="${project.id}" data-scenario-key="${scenario.key}"`
+            })}
           </div>
         </div>
         <div class="metric-list">
@@ -847,7 +988,12 @@
       <div class="grid grid-2" style="margin-bottom:14px;">
         <div>
           ${labelWithHelp("Precio base mensual", "Precio mensual de la suscripción antes de descuentos.")}
-          <input type="number" min="0" step="0.01" value="${project.subscription.baseMonthlyPrice}" data-action="update-subscription-base-price" data-project-id="${project.id}" data-focus-key="subscription-base-price-${project.id}" />
+          ${renderNumericInput({
+            value: project.subscription.baseMonthlyPrice,
+            action: "update-subscription-base-price",
+            focusKey: `subscription-base-price-${project.id}`,
+            attributes: ` data-project-id="${project.id}"`
+          })}
         </div>
         <div class="summary-card compact">
           <div class="label">Resumen de suscripción</div>
@@ -896,11 +1042,22 @@
           </div>
           <div>
             ${labelWithHelp("Descuento %", "Porcentaje de descuento aplicado sobre el precio base mensual.")}
-            <input type="number" min="0" max="100" step="0.01" value="${rule.discountPercent}" data-action="update-rule-discount" data-project-id="${project.id}" data-rule-id="${rule.id}" data-focus-key="rule-discount-${project.id}-${rule.id}" />
+            ${renderNumericInput({
+              value: rule.discountPercent,
+              action: "update-rule-discount",
+              focusKey: `rule-discount-${project.id}-${rule.id}`,
+              attributes: ` data-project-id="${project.id}" data-rule-id="${rule.id}"`
+            })}
           </div>
           <div>
             ${labelWithHelp("Cantidad", "Cantidad incluida por contrato o paquete al que aplica la regla.")}
-            <input type="number" min="0" step="1" value="${rule.quantity}" data-action="update-rule-quantity" data-project-id="${project.id}" data-rule-id="${rule.id}" data-focus-key="rule-quantity-${project.id}-${rule.id}" />
+            ${renderNumericInput({
+              value: rule.quantity,
+              action: "update-rule-quantity",
+              focusKey: `rule-quantity-${project.id}-${rule.id}`,
+              kind: "integer",
+              attributes: ` data-project-id="${project.id}" data-rule-id="${rule.id}"`
+            })}
           </div>
           <div>
             <label class="checkbox-row" style="margin-top:29px;">
@@ -913,7 +1070,13 @@
         <div class="inline-fields" style="margin-top:12px;">
           <div>
             ${labelWithHelp("Tiempo del contrato", "Duración del contrato o suscripción asociado a esta regla.")}
-            <input type="number" min="0" step="1" value="${rule.durationValue}" data-action="update-rule-duration-value" data-project-id="${project.id}" data-rule-id="${rule.id}" data-focus-key="rule-duration-value-${project.id}-${rule.id}" />
+            ${renderNumericInput({
+              value: rule.durationValue,
+              action: "update-rule-duration-value",
+              focusKey: `rule-duration-value-${project.id}-${rule.id}`,
+              kind: "integer",
+              attributes: ` data-project-id="${project.id}" data-rule-id="${rule.id}"`
+            })}
           </div>
           <div>
             <label>Unidad</label>
@@ -929,7 +1092,13 @@
           ${SCENARIOS.map(scenario => `
             <div>
               ${labelWithHelp(`Clientes ${scenario.label.toLowerCase()}`, "Cantidad de clientes o contratos del escenario que usarían esta regla.")}
-              <input type="number" min="0" step="1" value="${ruleScenarioClients(rule, scenario.key)}" data-action="update-rule-scenario-clients" data-project-id="${project.id}" data-rule-id="${rule.id}" data-scenario-key="${scenario.key}" data-focus-key="rule-clients-${project.id}-${rule.id}-${scenario.key}" />
+              ${renderNumericInput({
+                value: ruleScenarioClients(rule, scenario.key),
+                action: "update-rule-scenario-clients",
+                focusKey: `rule-clients-${project.id}-${rule.id}-${scenario.key}`,
+                kind: "integer",
+                attributes: ` data-project-id="${project.id}" data-rule-id="${rule.id}" data-scenario-key="${scenario.key}"`
+              })}
             </div>
           `).join("")}
         </div>
@@ -953,7 +1122,13 @@
         <div class="scenario-meta scenario-meta-3">
           <div>
             ${labelWithHelp("Clientes / contratos", "Cantidad total de clientes o contratos del escenario.")}
-            <input type="number" min="0" step="1" value="${revenue.totalClients}" data-action="update-subscription-scenario-clients" data-project-id="${project.id}" data-scenario-key="${scenario.key}" data-focus-key="subscription-scenario-clients-${project.id}-${scenario.key}" />
+            ${renderNumericInput({
+              value: revenue.totalClients,
+              action: "update-subscription-scenario-clients",
+              focusKey: `subscription-scenario-clients-${project.id}-${scenario.key}`,
+              kind: "integer",
+              attributes: ` data-project-id="${project.id}" data-scenario-key="${scenario.key}"`
+            })}
           </div>
           <div>
             <label>Ingreso mensual calculado</label>
@@ -994,6 +1169,9 @@
     const scenarioKey = state.selectedScenario;
     const scenarioLabel = SCENARIOS.find(item => item.key === scenarioKey)?.label || "Escenario";
     const metrics = portfolioMetrics(scenarioKey);
+    const developmentLabel = metrics.developmentMonths > 0
+      ? formatPeriod(state.settings.developmentPeriodValue, state.settings.developmentPeriodUnit)
+      : "";
 
     document.getElementById("portfolioSummary").innerHTML = `
       <div class="summary-card">
@@ -1004,17 +1182,17 @@
       <div class="summary-card">
         <div class="label">Flujo neto mensual</div>
         <div class="value ${metrics.monthlyNet >= 0 ? "positive" : "negative"}">${money(metrics.monthlyNet)}</div>
-        <div class="hint">Ingresos mensuales menos costos individuales y generales.</div>
+        <div class="hint">${developmentLabel ? `Después de ${developmentLabel} sin ingresos, este sería el flujo mensual estable.` : "Ingresos mensuales menos costos individuales y generales."}</div>
       </div>
       <div class="summary-card">
         <div class="label">Recuperación estimada</div>
         <div class="value" style="font-size:1.4rem;">${formatMonths(metrics.paybackMonths)}</div>
-        <div class="hint">Basado en el ${scenarioLabel.toLowerCase()}.</div>
+        <div class="hint">${developmentLabel ? `Incluye ${developmentLabel} iniciales sin ingresos, basado en el ${scenarioLabel.toLowerCase()}.` : `Basado en el ${scenarioLabel.toLowerCase()}.`}</div>
       </div>
       <div class="summary-card">
         <div class="label">ROI en ${metrics.months} meses</div>
         <div class="value ${metrics.roi >= 0 ? "positive" : "negative"}">${percentage(metrics.roi)}</div>
-        <div class="hint">${state.settings.roiMode === "cashGenerated" ? "Flujo neto acumulado / inversión." : "Flujo neto acumulado menos inversión."}</div>
+        <div class="hint">${metrics.developmentMonths > 0 ? `Reconoce ${formatPeriod(metrics.revenueMonths, "months")} con ingresos dentro del horizonte.` : state.settings.roiMode === "cashGenerated" ? "Flujo neto acumulado / inversión." : "Flujo neto acumulado menos inversión."}</div>
       </div>
     `;
 
@@ -1024,9 +1202,17 @@
 
   function renderPortfolioWarnings(metrics, scenarioLabel) {
     const warnings = [];
+    const developmentLabel = metrics.developmentMonths > 0
+      ? formatPeriod(state.settings.developmentPeriodValue, state.settings.developmentPeriodUnit)
+      : "";
 
     if (metrics.investment <= 0) {
       warnings.push({ type: "warning-box", text: "No hay inversión inicial registrada. El ROI pierde utilidad porque no existe una base de capital para comparar." });
+    }
+    if (metrics.developmentMonths > 0 && metrics.revenueMonths <= 0) {
+      warnings.push({ type: "danger-box", text: `El horizonte actual queda absorbido por el periodo de desarrollo (${developmentLabel}). En este análisis todavía no se reconoce ningún mes con ingresos.` });
+    } else if (metrics.developmentMonths > 0) {
+      warnings.push({ type: "warning-box", text: `Se están descontando ${developmentLabel} sin ingresos antes del lanzamiento. La recuperación y el ROI ya incluyen esa espera.` });
     }
     if (metrics.monthlyNet <= 0) {
       warnings.push({ type: "danger-box", text: `En ${scenarioLabel.toLowerCase()}, el flujo neto mensual no cubre los costos actuales. Se requiere reducir gastos, subir precio o aumentar clientes.` });
@@ -1090,6 +1276,9 @@
     const downside = worst.monthlyNet < 0
       ? `En el peor caso se perderían ${money(Math.abs(worst.monthlyNet))} por mes antes de cubrir costos.`
       : `En el peor caso todavía quedaría un flujo neto mensual de ${money(worst.monthlyNet)}.`;
+    const developmentLabel = metrics.developmentMonths > 0
+      ? formatPeriod(state.settings.developmentPeriodValue, state.settings.developmentPeriodUnit)
+      : "";
 
     const items = [
       {
@@ -1114,7 +1303,9 @@
       },
       {
         q: "¿Cuál es el principal punto débil del modelo?",
-        a: "El modelo mensualiza suscripciones y descuentos; si los clientes tardan en llegar o renovar, la recuperación real será más lenta que la simulación lineal."
+        a: metrics.developmentMonths > 0
+          ? `El modelo ya descuenta ${developmentLabel} sin ingresos iniciales, pero sigue siendo lineal una vez que empieza la facturación; si los clientes tardan en llegar o renovar, la recuperación real será aún más lenta.`
+          : "El modelo mensualiza suscripciones y descuentos; si los clientes tardan en llegar o renovar, la recuperación real será más lenta que la simulación lineal."
       }
     ];
 
@@ -1151,7 +1342,12 @@
           </div>
           <div>
             ${labelWithHelp("Monto invertido", "Capital aportado por este inversor. Sirve para la repartición equitativa.")}
-            <input type="number" min="0" step="0.01" value="${investor.amountInvested}" data-action="update-investor-amount" data-investor-id="${investor.id}" data-focus-key="investor-amount-${investor.id}" />
+            ${renderNumericInput({
+              value: investor.amountInvested,
+              action: "update-investor-amount",
+              focusKey: `investor-amount-${investor.id}`,
+              attributes: ` data-investor-id="${investor.id}"`
+            })}
           </div>
         </div>
 
@@ -1224,7 +1420,12 @@
           </div>
           <div>
             ${labelWithHelp("% para inversores", "Porcentaje de la ganancia neta del periodo que se destina a inversores.")}
-            <input type="number" min="0" max="100" step="0.01" value="${distribution.investorSharePercent}" data-action="update-distribution-share" data-distribution-id="${distribution.id}" data-focus-key="distribution-share-${distribution.id}" />
+            ${renderNumericInput({
+              value: distribution.investorSharePercent,
+              action: "update-distribution-share",
+              focusKey: `distribution-share-${distribution.id}`,
+              attributes: ` data-distribution-id="${distribution.id}"`
+            })}
           </div>
           <div>
             <label>Modo de reparto</label>
@@ -1239,7 +1440,13 @@
         <div class="inline-fields" style="margin-top:12px;">
           <div>
             <label>Periodo</label>
-            <input type="number" min="0" step="1" value="${distribution.periodValue}" data-action="update-distribution-period-value" data-distribution-id="${distribution.id}" data-focus-key="distribution-period-value-${distribution.id}" />
+            ${renderNumericInput({
+              value: distribution.periodValue,
+              action: "update-distribution-period-value",
+              focusKey: `distribution-period-value-${distribution.id}`,
+              kind: "integer",
+              attributes: ` data-distribution-id="${distribution.id}"`
+            })}
           </div>
           <div>
             <label>Unidad del periodo</label>
@@ -1321,7 +1528,12 @@
         ${distribution.mode === "manual" && selected ? `
           <div style="margin-top:10px;">
             <label>% manual dentro del pool</label>
-            <input type="number" min="0" max="100" step="0.01" value="${manualShare}" data-action="update-manual-share" data-distribution-id="${distribution.id}" data-investor-id="${investor.id}" data-focus-key="distribution-manual-share-${distribution.id}-${investor.id}" />
+            ${renderNumericInput({
+              value: manualShare,
+              action: "update-manual-share",
+              focusKey: `distribution-manual-share-${distribution.id}-${investor.id}`,
+              attributes: ` data-distribution-id="${distribution.id}" data-investor-id="${investor.id}"`
+            })}
           </div>
         ` : ""}
         <div class="status-line" style="margin-top:8px;">${selected ? `Participación estimada: ${percentage(payout?.sharePercent || 0)}. Pago estimado: ${money(payout?.amount || 0)}.` : "No incluido en esta repartición."}</div>
@@ -1359,6 +1571,13 @@
 
   function rerender(preserveFocus = false) {
     const focusSnapshot = preserveFocus ? captureFocus() : null;
+    if (focusSnapshot?.focusKey) {
+      uiState.numericDrafts = Object.fromEntries(
+        Object.entries(uiState.numericDrafts).filter(([key]) => key === focusSnapshot.focusKey)
+      );
+    } else {
+      uiState.numericDrafts = {};
+    }
     render();
     restoreFocus(focusSnapshot);
   }
@@ -1597,9 +1816,24 @@
   function handleInput(target) {
     const action = target.dataset.action;
     if (!action) return;
+    const numericState = target instanceof HTMLInputElement && target.dataset.numericKind
+      ? syncNumericInput(target)
+      : null;
 
     if (action === "update-analysis-months") {
-      state.settings.analysisMonths = Math.max(1, positiveNumber(target.value) || 1);
+      state.settings.analysisMonths = integerNumber(numericState?.value, 1) || 1;
+      rerender(true);
+      return;
+    }
+
+    if (action === "update-development-period-value") {
+      state.settings.developmentPeriodValue = numericState?.value ?? positiveNumber(target.value);
+      rerender(true);
+      return;
+    }
+
+    if (action === "update-development-period-unit") {
+      state.settings.developmentPeriodUnit = target.value === "years" ? "years" : "months";
       rerender(true);
       return;
     }
@@ -1637,7 +1871,7 @@
       }
 
       if (action === "update-global-cost-amount") {
-        cost.amount = positiveNumber(target.value);
+        cost.amount = numericState?.value ?? positiveNumber(target.value);
         rerender(true);
         return;
       }
@@ -1652,7 +1886,7 @@
       }
 
       if (action === "update-project-investment") {
-        project.investment = positiveNumber(target.value);
+        project.investment = numericState?.value ?? positiveNumber(target.value);
         rerender(true);
         return;
       }
@@ -1664,32 +1898,32 @@
           return;
         }
         if (action === "update-project-cost-amount") {
-          projectCost.amount = positiveNumber(target.value);
+          projectCost.amount = numericState?.value ?? positiveNumber(target.value);
           rerender(true);
           return;
         }
       }
 
       if (action === "update-manual-monthly") {
-        project.manualScenarios[target.dataset.scenarioKey].monthlyRevenue = positiveNumber(target.value);
+        project.manualScenarios[target.dataset.scenarioKey].monthlyRevenue = numericState?.value ?? positiveNumber(target.value);
         rerender(true);
         return;
       }
 
       if (action === "update-manual-annual") {
-        project.manualScenarios[target.dataset.scenarioKey].monthlyRevenue = positiveNumber(target.value) / 12;
+        project.manualScenarios[target.dataset.scenarioKey].monthlyRevenue = (numericState?.value ?? positiveNumber(target.value)) / 12;
         rerender(true);
         return;
       }
 
       if (action === "update-subscription-base-price") {
-        project.subscription.baseMonthlyPrice = positiveNumber(target.value);
+        project.subscription.baseMonthlyPrice = numericState?.value ?? positiveNumber(target.value);
         rerender(true);
         return;
       }
 
       if (action === "update-subscription-scenario-clients") {
-        project.subscription.scenarioClients[target.dataset.scenarioKey] = positiveNumber(target.value);
+        project.subscription.scenarioClients[target.dataset.scenarioKey] = integerNumber(numericState?.value);
         rerender(true);
         return;
       }
@@ -1701,17 +1935,17 @@
           return;
         }
         if (action === "update-rule-discount") {
-          rule.discountPercent = clampPercent(target.value);
+          rule.discountPercent = clampPercent(numericState?.value ?? target.value);
           rerender(true);
           return;
         }
         if (action === "update-rule-quantity") {
-          rule.quantity = Math.max(1, positiveNumber(target.value) || 1);
+          rule.quantity = integerNumber(numericState?.value, 1) || 1;
           rerender(true);
           return;
         }
         if (action === "update-rule-duration-value") {
-          rule.durationValue = Math.max(1, positiveNumber(target.value) || 1);
+          rule.durationValue = integerNumber(numericState?.value, 1) || 1;
           rerender(true);
           return;
         }
@@ -1721,7 +1955,7 @@
           return;
         }
         if (action === "update-rule-scenario-clients") {
-          rule.affectedClients[target.dataset.scenarioKey] = positiveNumber(target.value);
+          rule.affectedClients[target.dataset.scenarioKey] = integerNumber(numericState?.value);
           rerender(true);
           return;
         }
@@ -1741,7 +1975,7 @@
         return;
       }
       if (action === "update-investor-amount") {
-        investor.amountInvested = positiveNumber(target.value);
+        investor.amountInvested = numericState?.value ?? positiveNumber(target.value);
         refreshInvestorDerivedViews();
         return;
       }
@@ -1759,7 +1993,7 @@
         return;
       }
       if (action === "update-distribution-share") {
-        distribution.investorSharePercent = clampPercent(target.value);
+        distribution.investorSharePercent = clampPercent(numericState?.value ?? target.value);
         rerender(true);
         return;
       }
@@ -1769,7 +2003,7 @@
         return;
       }
       if (action === "update-distribution-period-value") {
-        distribution.periodValue = Math.max(1, positiveNumber(target.value) || 1);
+        distribution.periodValue = integerNumber(numericState?.value, 1) || 1;
         rerender(true);
         return;
       }
@@ -1791,7 +2025,7 @@
         return;
       }
       if (action === "update-manual-share") {
-        distribution.manualShares[target.dataset.investorId] = clampPercent(target.value);
+        distribution.manualShares[target.dataset.investorId] = clampPercent(numericState?.value ?? target.value);
         rerender(true);
       }
     }
